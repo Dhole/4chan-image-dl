@@ -74,7 +74,7 @@ def get_image(url):
   if not os.path.isdir(path):
     os.mkdir(path)
   else:
-    print("Folder thread already exists" + path)
+    print("Folder thread already exists: " + path)
     #sys.exit(1)
   
   #Download images
@@ -86,6 +86,10 @@ def get_image(url):
     except urllib.error.HTTPError as e:
       print("Thread went 404, exiting...")
       return
+    except:
+      print("Something wrong, trying again in 30 seconds")
+      sleep(30)
+      continue
     
     for im in images:
       if Glob.stop:
@@ -94,7 +98,11 @@ def get_image(url):
         if im not in down_images:
           filename =  re.findall("[0-9]*.(?:jpg|gif|png)",im)[0]
           #print("Downloading "+im)
-          urlretrieve(im, os.path.join(path,filename))
+          try:
+            urlretrieve(im, os.path.join(path,filename))
+          except:
+            print("Thread went 404 or something...")
+            break
           down_images.append(im)
       
     #Wait 30 seconds until next check
@@ -159,7 +167,8 @@ def print_db():
   print("Database " + db)
   Glob.threadLock.acquire()  
   with open(db, 'rb') as f:
-    print(pickle.load(f))
+    for k,v in pickle.load(f).items():
+      print(k,v)
   Glob.threadLock.release()
   
 def add_db(url):
