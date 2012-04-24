@@ -1,6 +1,14 @@
-#!/usr/bin/python3.2
+#!/usr/bin/env python3.2
+
 """ 4chan downloader
-This program will download all the images from a 4chan thread until 404'ed """
+This program will download all the images from 4chan threads until 404'ed """
+
+__author__ = "Dhole"
+__license__ = "BSD"
+__version__ = "0.2"
+__email__ = "bankukur@gmail.com"
+__status__ = "Development"
+
 
 from urllib.request import urlopen, urlretrieve
 import urllib.error
@@ -74,7 +82,7 @@ def get_image(url):
   if not os.path.isdir(path):
     os.mkdir(path)
   else:
-    print("Folder thread already exists: " + path)
+    print("Folder thread already exists, continue downloading: " + path)
     #sys.exit(1)
   
   #Download images
@@ -84,7 +92,7 @@ def get_image(url):
     try:
       images = get_image_urls(url)
     except urllib.error.HTTPError as e:
-      print("Thread went 404, exiting...")
+      print("Thread went 404, exiting...:" + url)
       return
     except:
       print("Something wrong, trying again in 30 seconds")
@@ -101,7 +109,7 @@ def get_image(url):
           try:
             urlretrieve(im, os.path.join(path,filename))
           except:
-            print("Thread went 404 or something...")
+            print("Thread is down or something...")
             break
           down_images.append(im)
       
