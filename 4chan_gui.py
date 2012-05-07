@@ -16,7 +16,7 @@ from PyQt4.QtGui import *
 from urllib.request import urlopen, urlretrieve
 from time import sleep
 import urllib.error
-import sys, operator, pickle, os, threading, re, webbrowser
+import sys, operator, pickle, os, threading, re, webbrowser, shutil
 
 class Glob(object):
 
@@ -70,10 +70,14 @@ class Glob(object):
       my_array[i].append(v['section'])
       my_array[i].append(v['thread'])
       my_array[i].append(v['number_images'])
+      
       if v['is404']:
         my_array[i].append('404')
       else:
-        my_array[i].append('Active')
+        if v['isPaused']:
+          my_array[i].append('Paused')
+        else:
+          my_array[i].append('Active')
       i = i + 1
     if len(Glob.x) == 0:
       my_array.append([[' '],[' '],[' '],[' '],[' ']])
@@ -177,10 +181,19 @@ class TheTable(QTableView):
        
     
   def continue_slot(self, value):
-  	print("Continuing with " + value)
+    print("Continuing with " + value)
+    Glob.threadLock_mem.acquire()
+    Glob.x[value]['isPaused'] = False
+    Glob.write()
+    Glob.threadLock_mem.release()
   	
   def pause_slot(self, value):
-  	print("Pausing " + value)
+    print("Pausing " + value)
+    Glob.threadLock_mem.acquire()
+    Glob.x[value]['isPaused'] = True
+    Glob.write()
+    Glob.threadLock_mem.release()
+  	
   	
   def browse_url_slot(self, value):
   	print("Browsing url " + value) 
@@ -195,6 +208,7 @@ class TheTable(QTableView):
   	Glob.threadLock_mem.acquire()
   	if Glob.x[value]['is404']:
   	  del Glob.x[value]
+  	  Glob.write()
   	else:
   	  print(value + " is not 404, you should delete it instead")
   	Glob.threadLock_mem.release()
@@ -210,8 +224,20 @@ class TheTable(QTableView):
     os.system("xdg-open " + path)
   	
   def delete_slot(self, value):
-  	print("Deleting " + value)
-  	
+    print("Deleting " + value)
+    Glob.threadLock_mem.acquire()
+    Glob.x[value]['isPaused'] = True
+    del Glob.x[value]
+    Glob.write()
+    Glob.threadLock_mem.release()
+    print("yay")
+    section = re.findall("4chan.org/[a-z0-9]*/res", value)[0].split("/")[1]
+    number =  re.findall("res/[0-9]*", value)[0][4:]  
+    path = os.getcwd()
+    path = os.path.join(path, section) 
+    path = os.path.join(path, number)  
+    shutil.rmtree(path)
+  		
   def updateGeometries(self):
     super(TheTable, self).updateGeometries()
     self.verticalScrollBar().setSingleStep(2)
@@ -220,7 +246,6 @@ class TheTable(QTableView):
   # super(TheTable, self).data()
   #return QVariant(QColor(Qt.red))
     
-
 
 class MyWindow(QMainWindow):
   def __init__(self, *args):
@@ -266,7 +291,7 @@ class MyWindow(QMainWindow):
     pauseAllAction.setShortcut('Ctrl+P')
     pauseAllAction.triggered.connect(self.pauseAllSlot)
     
-    continueAllAction = QAction(QIcon('continue.svg'), 'Pause all', self)
+    continueAllAction = QAction(QIcon('continue.svg'), 'Continue all', self)
     continueAllAction.setShortcut('Ctrl+P')
     continueAllAction.triggered.connect(self.continueAllSlot)
     
@@ -300,8 +325,8 @@ class MyWindow(QMainWindow):
     for i in range(0,5):
       cur_size = self.tb.horizontalHeader().sectionSize(i) + 8
       width = width + cur_size
-    if width < 300:
-      width = 600
+    if width < 800:
+      width = 800
       
     self.setMaximumWidth(width)
     self.setMinimumWidth(width)
@@ -345,9 +370,19 @@ class MyWindow(QMainWindow):
        
   def pauseAllSlot(self):
     print("Pausing all threads")
+    Glob.threadLock_mem.acquire()
+    for k, v in Glob.x.items():
+      Glob.x[k]['isPaused'] = True
+    Glob.write()
+    Glob.threadLock_mem.release()
     
   def continueAllSlot(self):
     print("Continuing all threads")
+    Glob.threadLock_mem.acquire()
+    for k, v in Glob.x.items():
+      Glob.x[k]['isPaused'] = False
+    Glob.write()
+    Glob.threadLock_mem.release()
   
   def clear404Slot(self):
     print("Clearing all 404 threads")   
@@ -442,7 +477,7 @@ class MyTableModel(QAbstractTableModel):
     
 def check_url(url):
   #Test if url is ok
-  url_parsed = re.findall("http.*4chan.org/[a-z0-9]*/res/[0-9]*", url)
+  url_parsed = re.findall("https.*4chan.org/[a-z0-9]*/res/[0-9]*", url)
   if len(url_parsed) < 1:
     #print("Malformed url")
     return ""
@@ -468,7 +503,7 @@ def get_image_urls(url):
   images = list(set(images))
   images_http = []
   for im in images:
-    images_http.append("http://"+im)
+    images_http.append("https://"+im)
   #Remove duplicate entries
   
   return images_http
@@ -503,18 +538,36 @@ def get_image(url):
   
   #Download images
   down_images = []
-  while True:
+  while not Glob.stop:
     #Get image urls
+    Glob.threadLock_mem.acquire() #Workarround...
+    try:
+      isPaused = Glob.x[url]['isPaused']
+    except KeyError as e:
+      print("This needs to be corrected")
+      return
+    Glob.threadLock_mem.release()
+    if  isPaused:
+      sleep(1)
+      continue
     try:
       images = get_image_urls(url)
     except urllib.error.HTTPError as e:
       print("Thread went 404, exiting...")
+      Glob.threadLock_mem.acquire()
+      Glob.x[url]['is404'] = True
+      Glob.threadLock_mem.release()
       #Glob.update_values()
       return
     
     for im in images:
+      Glob.threadLock_mem.acquire()
+      isPaused = Glob.x[url]['isPaused']
+      Glob.threadLock_mem.release()
       if Glob.stop:
         sys.exit(1)
+      elif isPaused:
+        continue
       else:
         if im not in down_images:
           filename =  re.findall("[0-9]*.(?:jpg|gif|png)",im)[0]
@@ -528,7 +581,16 @@ def get_image(url):
           #Glob.update_values()
       
     #Wait 30 seconds until next check
-    wait(30)
+    tt = 0
+    Glob.threadLock_mem.acquire()
+    isPaused = Glob.x[url]['isPaused']
+    Glob.threadLock_mem.release()
+    while tt != 30 and not isPaused:
+      sleep(1)
+      Glob.threadLock_mem.acquire()
+      isPaused = Glob.x[url]['isPaused']
+      Glob.threadLock_mem.release()      
+      
    
 #class TableUpdater(threading.Thread):
 #  def __init__(self, t): 
@@ -557,10 +619,14 @@ class Worker(threading.Thread):
     get_image(self.url)
     
     Glob.threadLock_mem.acquire()
-    Glob.x[self.url]["is404"] = True
-    Glob.x[self.url]["isActive"] = False
+    #Glob.x[self.url]["is404"] = True
+    try: #Workarround
+      Glob.x[self.url]["isActive"] = False
+    except:
+      print("Workarround")
     Glob.write()
     Glob.threadLock_mem.release()
+    
     
 class Reader(threading.Thread):
   def __init__(self):
@@ -609,6 +675,7 @@ def add_db(url):
     Glob.x[url] = {}	
     Glob.x[url]["is404"] = False
     Glob.x[url]["isActive"] = False
+    Glob.x[url]["isPaused"] = False
     Glob.x[url]['section'] = re.findall("4chan.org/[a-z0-9]*/res", url)[0].split("/")[1]
     Glob.x[url]['thread'] = re.findall("res/[0-9]*", url)[0][4:]
     Glob.x[url]['number_images'] = '*/*'
