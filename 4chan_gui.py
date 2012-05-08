@@ -16,7 +16,8 @@ from PyQt4.QtGui import *
 from urllib.request import urlopen, urlretrieve
 from time import sleep
 import urllib.error
-import sys, operator, pickle, os, threading, re, webbrowser, shutil
+import sys, operator, pickle, os, threading, re, webbrowser, shutil, queue
+
 
 class Glob(object):
 
@@ -28,6 +29,7 @@ class Glob(object):
   threadLock_mem = threading.RLock()
   threadLock_file = threading.RLock()
   db = ''
+  q = {}
   
   def initialize(db):
     
@@ -64,7 +66,6 @@ class Glob(object):
     i = 0
     my_array = []
     for k,v in Glob.x.items():
-      #print(k)
       my_array.append([])
       my_array[i].append(k)
       my_array[i].append(v['section'])
@@ -88,38 +89,25 @@ class Glob(object):
 class TheTable(QTableView):
   def __init__(self, parent = None):
     QTableView.__init__(self, parent)
-    
-    #print(my_array)
-    #print("Ayayayayay")
-    #print(Glob.my_array)
+
     self.tablemodel = MyTableModel(Glob.my_array, Glob.header, self)
-    
-    #rowColor = Qt.blue
-    #self.model().setData(Qt.BackgroundRole, rowColor)
 
     self.setModel(self.tablemodel)
-    #self.resizeColumnsToContents()
     self.resizeRowsToContents()
     self.resizeColumnsToContents() 
     self.setSortingEnabled(True)
     self.verticalHeader().hide()
-    #self.clicked.connect(self.right_click_table)
-    #self.horizontalHeader().setResizeMode(QHeaderView.ResizeToContents)
     for i in range(0,5):
       cur_size = self.horizontalHeader().sectionSize(i)
       self.horizontalHeader().resizeSection(i,cur_size + 20)
     self.horizontalHeader().setResizeMode(QHeaderView.Fixed)
     self.horizontalHeader().setStretchLastSection(True)
     self.current_row = -1
-      
-    
-      
-    #self.show()
+
   def mousePressEvent(self, event):
     index = self.indexAt(event.pos())
   	
     if (index.isValid()):
-      #if 	event.button() == Qt.RightButton:
       self.current_row = row = index.row()
       self.selectRow(self.current_row)
     else:
@@ -130,18 +118,16 @@ class TheTable(QTableView):
   
     index = self.indexAt(event.pos())
   	
-    if (index.isValid()):
+    if (index.isValid() and len(Glob.x) != 0):
       row = index.row()
       self.current_row = row
       self.selectRow(self.current_row)
       column = index.column()
-      #print("Row " + str(row) + " - Column " + str(column) + " was clicked")
       value = self.model().index(row, 0).data()
-      #print(value)
     else:
       self.current_row = -1
       return
-      
+
     # The menu
     menu = QMenu(self)
     # Add your actions
@@ -152,14 +138,17 @@ class TheTable(QTableView):
     clearAction = QAction("Clear", self)   
     view_folderAction = QAction("View folder", self)
     deleteAction = QAction("Delete", self)
-    menu.addAction(continueAction)
-    menu.addAction(pauseAction)
+
     menu.addAction(browse_urlAction)
-    menu.addAction(copyAction)
-    menu.addAction(clearAction)
     menu.addAction(view_folderAction)
+    menu.addAction(copyAction)
     menu.addSeparator()
+    menu.addAction(pauseAction)
+    menu.addAction(continueAction)
+    menu.addSeparator()
+    menu.addAction(clearAction)
     menu.addAction(deleteAction)
+    
     continueAction.triggered.connect(lambda: self.continue_slot(value))
     pauseAction.triggered.connect(lambda: self.pause_slot(value))
     browse_urlAction.triggered.connect(lambda: self.browse_url_slot(value))    
@@ -173,27 +162,15 @@ class TheTable(QTableView):
     #menu.addAction(delete_filesAction)
     #menu.addAction(view_folderAction)
     self.clipboard = QApplication.clipboard()
-
-    #print(.row())
-    # Add some check here for event.globalPos() to see if it's in your widget
-    # Open the menu
     menu.popup(event.globalPos())
-       
-    
+         
   def continue_slot(self, value):
     print("Continuing with " + value)
-    Glob.threadLock_mem.acquire()
-    Glob.x[value]['isPaused'] = False
-    Glob.write()
-    Glob.threadLock_mem.release()
+    Glob.q[value].put('continue')
   	
   def pause_slot(self, value):
     print("Pausing " + value)
-    Glob.threadLock_mem.acquire()
-    Glob.x[value]['isPaused'] = True
-    Glob.write()
-    Glob.threadLock_mem.release()
-  	
+    Glob.q[value].put('pause')
   	
   def browse_url_slot(self, value):
   	print("Browsing url " + value) 
@@ -225,64 +202,38 @@ class TheTable(QTableView):
   	
   def delete_slot(self, value):
     print("Deleting " + value)
-    Glob.threadLock_mem.acquire()
-    Glob.x[value]['isPaused'] = True
-    del Glob.x[value]
-    Glob.write()
-    Glob.threadLock_mem.release()
-    print("yay")
-    section = re.findall("4chan.org/[a-z0-9]*/res", value)[0].split("/")[1]
-    number =  re.findall("res/[0-9]*", value)[0][4:]  
-    path = os.getcwd()
-    path = os.path.join(path, section) 
-    path = os.path.join(path, number)  
-    shutil.rmtree(path)
+    Glob.q[value].put('delete')
   		
   def updateGeometries(self):
     super(TheTable, self).updateGeometries()
     self.verticalScrollBar().setSingleStep(2)
-  
-  #def data(self):
-  # super(TheTable, self).data()
-  #return QVariant(QColor(Qt.red))
     
 
 class MyWindow(QMainWindow):
   def __init__(self, *args):
     QWidget.__init__(self, *args)
 
-    #print(my_array)
-    #exit(1)
-    #self.resize(470, 616)
     self.centralwidget = QWidget(self)
     topBox = QHBoxLayout()
     box = QVBoxLayout(self.centralwidget)
-    #lowBox = QHBoxLayout(self.centralwidget)    
     self.urlLine = QLineEdit(self)
     topBox.addWidget(self.urlLine)
     self.downloadButton = QPushButton('', self)
     self.downloadButton.setIcon(QIcon('download.svg'))
     self.downloadButton.setEnabled(False)
     topBox.addWidget(self.downloadButton)
-    self.downloadMoreButton = QPushButton('Download more', self)
-    topBox.addWidget(self.downloadMoreButton)
+    #self.downloadMoreButton = QPushButton('Download more', self)
+    #topBox.addWidget(self.downloadMoreButton)
     box.addLayout(topBox)
     self.tb = TheTable(self.centralwidget)
     box.addWidget(self.tb)
-    #lowBox.addLayout(box)
     self.setCentralWidget(self.centralwidget)
     
     self.url = ''
     self.downloadButton.clicked.connect(self.downloadUrl)
     self.urlLine.textChanged[str].connect(self.enteredUrl)
     self.urlLine.returnPressed.connect(self.downloadUrl)
-    #self.mainWidget=QWidget(self)
-    #self.mainLayout=QVBoxLayout(self.mainWidget, 5, 5, "main")
-   
-
-    #self.setCentralWidget(self.tb)
-    
-    
+       
     self.createActions()
     self.createMenus()
     self.createStatusBar()
@@ -302,22 +253,26 @@ class MyWindow(QMainWindow):
     self.menu = QMenu()
     self.menu.addAction("un")
     self.menu.addAction("dos")
-
     
     self.toolbar = self.addToolBar('Pause all')
+    self.toolbar.setFloatable(False)
+    self.toolbar.setMovable(False)
     self.toolbar.addAction(pauseAllAction)
     self.toolbar = self.addToolBar('Continue all')
+    self.toolbar.setFloatable(False)
+    self.toolbar.setMovable(False)
     self.toolbar.addAction(continueAllAction)
     self.toolbar = self.addToolBar('Clear all 404 all')
+    self.toolbar.setFloatable(False)
+    self.toolbar.setMovable(False)
     self.toolbar.addAction(clear404Action)
-
+    
     self.setWindowIcon(QIcon('big_icon.png'))
     self.setGeometry(300, 50, 600, 600)
     self.update_dimensions()
     self.setWindowTitle('4CHONDL')
     self.show()
-    
-    
+       
   def update_dimensions(self):
     self.tb.resizeRowsToContents()
     self.tb.resizeColumnsToContents() 
@@ -347,7 +302,6 @@ class MyWindow(QMainWindow):
     else:
       print("Downloading url " +  url_ok)
       self.urlLine.clear()
-      #self.urlLine.setText(QString(''))
       add_db(url_ok)
       Glob.update = True  
       Glob.update_values()
@@ -355,11 +309,9 @@ class MyWindow(QMainWindow):
       
       
   def update_table(self):
-    #s = self.tb.selectionModel()
     Glob.update_values()
     self.tb.tablemodel = MyTableModel(Glob.my_array, Glob.header, self.tb)
     self.tb.setModel(self.tb.tablemodel)
-    #		self.tb.setSelectionModel(s)
     sort_column = self.tb.horizontalHeader().sortIndicatorSection()
     sort_order = self.tb.horizontalHeader().sortIndicatorOrder()
     self.tb.sortByColumn(sort_column, sort_order)    
@@ -367,25 +319,20 @@ class MyWindow(QMainWindow):
     if self.tb.current_row != -1:
       self.tb.selectRow(self.tb.current_row)
         
-       
   def pauseAllSlot(self):
+    self.statusBar().showMessage(self.tr("Pausing all threads"))
     print("Pausing all threads")
-    Glob.threadLock_mem.acquire()
-    for k, v in Glob.x.items():
-      Glob.x[k]['isPaused'] = True
-    Glob.write()
-    Glob.threadLock_mem.release()
+    for k, v in Glob.q.items():
+      Glob.q[k].put('pause')
     
   def continueAllSlot(self):
+    self.statusBar().showMessage(self.tr("Continuing all threads"))
     print("Continuing all threads")
-    Glob.threadLock_mem.acquire()
-    for k, v in Glob.x.items():
-      Glob.x[k]['isPaused'] = False
-    Glob.write()
-    Glob.threadLock_mem.release()
+    for k, v in Glob.q.items():
+      Glob.q[k].put('continue')
   
   def clear404Slot(self):
-    print("Clearing all 404 threads")   
+    self.statusBar().showMessage(self.tr("Clearing all 404 threads"))
     Glob.threadLock_mem.acquire()
     to_delete = []
     for k, v in Glob.x.items():
@@ -430,7 +377,6 @@ class MyWindow(QMainWindow):
     sb.setFixedHeight(18)
     self.setStatusBar(sb)
     self.statusBar().showMessage(self.tr("Ready"))
-    
 
 
 class MyTableModel(QAbstractTableModel):
@@ -438,8 +384,6 @@ class MyTableModel(QAbstractTableModel):
     QAbstractTableModel.__init__(self, parent, *args)
     self.arraydata = datain
     self.headerdata = headerdata
-    #print("Hola que tal>>>>>>>>>>>>>>>>>>")
-    #print(self.arraydata)
 
   def rowCount(self, parent):
       return len(self.arraydata)
@@ -475,14 +419,15 @@ class MyTableModel(QAbstractTableModel):
       self.arraydata.reverse()
     self.emit(SIGNAL("layoutChanged()"))
     
+    
 def check_url(url):
   #Test if url is ok
   url_parsed = re.findall("https.*4chan.org/[a-z0-9]*/res/[0-9]*", url)
   if len(url_parsed) < 1:
-    #print("Malformed url")
     return ""
   else:
     return url_parsed[0]
+
 
 def wait(seconds):
   for i in range(0,seconds):
@@ -491,10 +436,21 @@ def wait(seconds):
     else:
       sleep(1)
 
+
 def get_image_urls(url):
 
   #fetch html from url
-  f = urlopen(url)
+  while not Glob.stop:
+    try:
+      f = urlopen(url)
+    except:
+      pass
+    else:
+      break
+      
+  if Glob.stop:
+    sys.exit(1)
+  
   html_code = f.read()
   html_code = str(html_code)
   #Find urls to the images
@@ -504,18 +460,31 @@ def get_image_urls(url):
   images_http = []
   for im in images:
     images_http.append("https://"+im)
-  #Remove duplicate entries
   
   return images_http
   
 def get_image(url): 
   
   #Test if url is up
-  try:
-    connection = urlopen(url)
-  except urllib.error.HTTPError as e:
-    print("Url down or something wrong: " + str(e.getcode()))
-    return
+  while True:
+    try:
+      connection = urlopen(url)
+    except urllib.error.HTTPError as e:
+      if e.getcode() == 404:
+        print("Url down or something wrong: " + str(e.getcode()))
+        return '404'
+    except:
+      print("Connection problems, trying again in 30 seconds...")
+      try:
+        order = Glob.q[url].get(block=True, timeout=30)
+      except queue.Empty as e:
+        pass
+      else:
+        if order == 'exit':
+          return 'exit'
+    else:
+      break
+      
   del connection
   
   #Parse section and thread number
@@ -532,100 +501,77 @@ def get_image(url):
   #Create thread directory
   if not os.path.isdir(path):
     os.mkdir(path)
-  #else:
-    #print("Folder thread already exists")
-    #sys.exit(1)
   
   #Download images
   down_images = []
-  while not Glob.stop:
-    #Get image urls
-    Glob.threadLock_mem.acquire() #Workarround...
-    try:
-      isPaused = Glob.x[url]['isPaused']
-    except KeyError as e:
-      print("This needs to be corrected")
-      return
-    Glob.threadLock_mem.release()
-    if  isPaused:
-      sleep(1)
-      continue
+  Glob.q[url].put('continue')
+  while True:
+    while True:
+      try:
+        order = Glob.q[url].get(block=True, timeout=30)
+      except queue.Empty as e:
+        pass
+      else:
+        if order == 'pause':
+          Glob.threadLock_mem.acquire()
+          Glob.x[url]['isPaused'] = True
+          Glob.threadLock_mem.release() 
+          continue
+        elif order == 'continue':
+          Glob.threadLock_mem.acquire()
+          Glob.x[url]['isPaused'] = False
+          Glob.threadLock_mem.release() 
+          break
+        elif order == 'delete':
+          return 'delete'
+        elif order == 'exit':
+          return 'exit'
+        
     try:
       images = get_image_urls(url)
     except urllib.error.HTTPError as e:
       print("Thread went 404, exiting...")
-      Glob.threadLock_mem.acquire()
-      Glob.x[url]['is404'] = True
-      Glob.threadLock_mem.release()
-      #Glob.update_values()
-      return
+      return '404'
     
     for im in images:
-      Glob.threadLock_mem.acquire()
-      isPaused = Glob.x[url]['isPaused']
-      Glob.threadLock_mem.release()
-      if Glob.stop:
-        sys.exit(1)
-      elif isPaused:
-        continue
-      else:
-        if im not in down_images:
-          filename =  re.findall("[0-9]*.(?:jpg|gif|png)",im)[0]
-          #print("Downloading "+im)
-          if not os.path.exists(os.path.join(path,filename)):
-            urlretrieve(im, os.path.join(path,filename))
-          down_images.append(im)
-          Glob.threadLock_mem.acquire()
-          Glob.x[url]['number_images'] = str(len(down_images)) + "/" + str(len(images))          
-          Glob.threadLock_mem.release()
-          #Glob.update_values()
-      
-    #Wait 30 seconds until next check
-    tt = 0
-    Glob.threadLock_mem.acquire()
-    isPaused = Glob.x[url]['isPaused']
-    Glob.threadLock_mem.release()
-    while tt != 30 and not isPaused:
-      sleep(1)
-      Glob.threadLock_mem.acquire()
-      isPaused = Glob.x[url]['isPaused']
-      Glob.threadLock_mem.release()      
-      
-   
-#class TableUpdater(threading.Thread):
-#  def __init__(self, t): 
-#    threading.Thread.__init__(self)
-#    self.t = t
-#    self.setDaemon(True)
-#    
-#  def run(self):
-#    while True:
-#      try: 
-#        w   
-#        w.update_table()
-#      except: 
-#        sleep(1)
-#      sleep(self.t)
+      if not Glob.q[url].empty(): break
+      if im not in down_images:
+        filename =  re.findall("[0-9]*.(?:jpg|gif|png)",im)[0]
+        if not os.path.exists(os.path.join(path,filename)):
+          urlretrieve(im, os.path.join(path,filename))
+        down_images.append(im)
+        
+        Glob.threadLock_mem.acquire()
+        Glob.x[url]['number_images'] = str(len(down_images)) + "/" + str(len(images))          
+        Glob.threadLock_mem.release()   
+
     
 class Worker(threading.Thread):
   def __init__(self, url):
     threading.Thread.__init__(self)
     self.url = url
-    #self.setDaemon(True)
     
   def run(self):
     
     #Start function to download images
-    get_image(self.url)
+    status = get_image(self.url)
     
     Glob.threadLock_mem.acquire()
-    #Glob.x[self.url]["is404"] = True
-    try: #Workarround
+    if status == '404':
+      Glob.x[self.url]["is404"] = True
       Glob.x[self.url]["isActive"] = False
-    except:
-      print("Workarround")
+    elif status == 'delete':
+      Glob.x[self.url]['isPaused'] = True
+      del Glob.x[self.url]
     Glob.write()
     Glob.threadLock_mem.release()
+    if status == 'delete':
+      section = re.findall("4chan.org/[a-z0-9]*/res", self.url)[0].split("/")[1]
+      number =  re.findall("res/[0-9]*", self.url)[0][4:]  
+      path = os.getcwd()
+      path = os.path.join(path, section) 
+      path = os.path.join(path, number)  
+      shutil.rmtree(path)
     
     
 class Reader(threading.Thread):
@@ -640,6 +586,7 @@ class Reader(threading.Thread):
         w = Worker(k)
         w.start()
         Glob.x[k]["isActive"] = True
+        Glob.q[k] = queue.Queue()
       
     Glob.write()
     Glob.threadLock_mem.release()
@@ -649,7 +596,6 @@ class Reader(threading.Thread):
         sys.exit(1)
       elif Glob.update:
         Glob.threadLock_mem.acquire()
-        #print(Glob.x)
         for k, v in Glob.x.items():
           if not Glob.x[k]["isActive"] and not Glob.x[k]["is404"]:
             w = Worker(k)
@@ -668,6 +614,7 @@ def print_db():
   print(Glob.x)
   Glob.threadLock_mem.release()
   
+  
 def add_db(url):
   Glob.threadLock_mem.acquire()
   if not url in Glob.x:
@@ -679,28 +626,35 @@ def add_db(url):
     Glob.x[url]['section'] = re.findall("4chan.org/[a-z0-9]*/res", url)[0].split("/")[1]
     Glob.x[url]['thread'] = re.findall("res/[0-9]*", url)[0][4:]
     Glob.x[url]['number_images'] = '*/*'
+    Glob.q[url] = queue.Queue()
   else:
     print("Already downloading thread " + url)
     
   Glob.write()
   Glob.threadLock_mem.release()
   
+  
 def get_db():
   return Glob.x
+     
         
 def exit_all(app):
   app.exec_()
   Glob.stop = True
+  for k, v in Glob.q.items():
+    Glob.q[k].put('exit')
   print("Please, wait while the program is finishing")
         
+        
 def main():
-  
+
+  global db
   #Check input arguments
   if len(sys.argv) != 2:
-    print("usage: ./4chan.py urls_file")
-    sys.exit(1)
-  
-  global db
+    #print("usage: ./4chan.py urls_file")
+    #sys.exit(1)
+    db = 'urls_db'
+    
   db = sys.argv[1]  
   
   if sys.argv[1] == "s":
@@ -713,10 +667,6 @@ def main():
   
   reader = Reader()
   reader.start()
-  
-
-#  updater = TableUpdater(1)
-#  updater.start()
   
   app = QApplication(sys.argv)
   w = MyWindow()
