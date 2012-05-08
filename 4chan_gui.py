@@ -16,7 +16,7 @@ from PyQt4.QtGui import *
 from urllib.request import urlopen, urlretrieve
 from time import sleep
 import urllib.error
-import sys, operator, pickle, os, threading, re, webbrowser, shutil, queue
+import sys, operator, pickle, os, threading, re, webbrowser, shutil, queue, urllib.request
 
 
 class Glob(object):
@@ -482,6 +482,8 @@ def get_image(url):
       else:
         if order == 'exit':
           return 'exit'
+        else:
+          break
     else:
       break
       
@@ -510,7 +512,7 @@ def get_image(url):
       try:
         order = Glob.q[url].get(block=True, timeout=30)
       except queue.Empty as e:
-        pass
+        break
       else:
         if order == 'pause':
           Glob.threadLock_mem.acquire()
@@ -532,13 +534,26 @@ def get_image(url):
     except urllib.error.HTTPError as e:
       print("Thread went 404, exiting...")
       return '404'
+    except:
+      print("Connection problems, trying again in 30 seconds!...")
+      continue
     
     for im in images:
       if not Glob.q[url].empty(): break
       if im not in down_images:
         filename =  re.findall("[0-9]*.(?:jpg|gif|png)",im)[0]
         if not os.path.exists(os.path.join(path,filename)):
-          urlretrieve(im, os.path.join(path,filename))
+          try:
+            print('ok0')
+            urlretrieve(im, os.path.join(path,filename))
+            print('ok0.1')
+          except IOError as e:
+            print('Network problem')
+            break
+          except:
+            print('Other problem')
+            break
+          print('ok2')
         down_images.append(im)
         
         Glob.threadLock_mem.acquire()
@@ -654,15 +669,14 @@ def main():
     #print("usage: ./4chan.py urls_file")
     #sys.exit(1)
     db = 'urls_db'
-    
-  db = sys.argv[1]  
-  
-  if sys.argv[1] == "s":
-    db = "urls_db"
-    Glob.initialize(db)
-    print_db()
-    sys.exit(1)
-    
+  else:
+    db = sys.argv[1]  
+    if sys.argv[1] == "s":
+      db = "urls_db"
+      Glob.initialize(db)
+      print_db()
+      sys.exit(1)
+      
   Glob.initialize(db)
   
   reader = Reader()
