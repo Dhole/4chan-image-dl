@@ -15,8 +15,12 @@ from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 from urllib.request import urlopen, urlretrieve
 from time import sleep
+from contextlib import closing
 import urllib.error
 import sys, operator, pickle, os, threading, re, webbrowser, shutil, queue, urllib.request
+
+import socket
+socket.setdefaulttimeout(10)
 
 
 class Glob(object):
@@ -440,18 +444,12 @@ def wait(seconds):
 def get_image_urls(url):
 
   #fetch html from url
-  while not Glob.stop:
-    try:
-      f = urlopen(url)
-    except:
-      pass
-    else:
-      break
+  with closing(urlopen(url)) as page:
+    html_code = page.read()
       
   if Glob.stop:
     sys.exit(1)
   
-  html_code = f.read()
   html_code = str(html_code)
   #Find urls to the images
   images =re.findall("(?:img|cgi|images).4chan.org/[a-z0-9]+/src/(?:cb-nws/)?(?:[0-9]*).(?:jpg|png|gif)", html_code)
@@ -468,26 +466,28 @@ def get_image(url):
   #Test if url is up
   while True:
     try:
-      connection = urlopen(url)
+      with closing(urlopen(url)) as connection:
+        pass
     except urllib.error.HTTPError as e:
       if e.getcode() == 404:
         print("Url down or something wrong: " + str(e.getcode()))
         return '404'
-    except:
-      print("Connection problems, trying again in 30 seconds...")
-      try:
-        order = Glob.q[url].get(block=True, timeout=30)
-      except queue.Empty as e:
-        pass
-      else:
-        if order == 'exit':
-          return 'exit'
-        else:
-          break
+      pass
     else:
       break
       
-  del connection
+    print("Connection problems, trying again in 30 seconds...")
+    try:
+      order = Glob.q[url].get(block=True, timeout=30)
+    except queue.Empty as e:
+      pass
+    else:
+      if order == 'exit':
+        return 'exit'
+      else:
+        break
+      
+  #del connection
   
   #Parse section and thread number
   section = re.findall("4chan.org/[a-z0-9]*/res", url)[0].split("/")[1]
@@ -532,8 +532,10 @@ def get_image(url):
     try:
       images = get_image_urls(url)
     except urllib.error.HTTPError as e:
-      print("Thread went 404, exiting...")
-      return '404'
+      if e.getcode() == 404:
+        print("Url down or something wrong: " + str(e.getcode()))
+        return '404'
+      continue
     except:
       print("Connection problems, trying again in 30 seconds!...")
       continue
@@ -544,16 +546,13 @@ def get_image(url):
         filename =  re.findall("[0-9]*.(?:jpg|gif|png)",im)[0]
         if not os.path.exists(os.path.join(path,filename)):
           try:
-            print('ok0')
             urlretrieve(im, os.path.join(path,filename))
-            print('ok0.1')
           except IOError as e:
             print('Network problem')
             break
           except:
             print('Other problem')
             break
-          print('ok2')
         down_images.append(im)
         
         Glob.threadLock_mem.acquire()
@@ -584,9 +583,12 @@ class Worker(threading.Thread):
       section = re.findall("4chan.org/[a-z0-9]*/res", self.url)[0].split("/")[1]
       number =  re.findall("res/[0-9]*", self.url)[0][4:]  
       path = os.getcwd()
-      path = os.path.join(path, section) 
-      path = os.path.join(path, number)  
-      shutil.rmtree(path)
+      path = os.path.join(path, section)
+      path = os.path.join(path, number)
+      if os.path.isdir(path):
+        shutil.rmtree(path)
+      else:
+        print('Folder didn\'t exist')
     
     
 class Reader(threading.Thread):
@@ -658,6 +660,9 @@ def exit_all(app):
   Glob.stop = True
   for k, v in Glob.q.items():
     Glob.q[k].put('exit')
+  Glob.threadLock_mem.acquire()
+  Glob.write()
+  Glob.threadLock_mem.release()
   print("Please, wait while the program is finishing")
         
         
