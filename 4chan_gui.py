@@ -89,6 +89,21 @@ class Glob(object):
       
     Glob.threadLock_mem.release()
     Glob.my_array = my_array
+    
+  def delete(url):
+    Glob.threadLock_mem.acquire()
+    del Glob.x[value]
+    Glob.write()
+    Glob.threadLock_mem.release()
+    section = re.findall("4chan.org/[a-z0-9]*/res", url)[0].split("/")[1]
+    number =  re.findall("res/[0-9]*", url)[0][4:]  
+    path = os.getcwd()
+    path = os.path.join(path, section)
+    path = os.path.join(path, number)
+    if os.path.isdir(path):
+      shutil.rmtree(path)
+    else:
+      print('Folder didn\'t exist')    
 
 class TheTable(QTableView):
   def __init__(self, parent = None):
@@ -206,8 +221,15 @@ class TheTable(QTableView):
   	
   def delete_slot(self, value):
     print("Deleting " + value)
-    Glob.q[value].put('delete')
-  		
+    Glob.threadLock_mem.acquire()
+    is404 = Glob.x[value]['is404']
+    Glob.threadLock_mem.release()
+    if is404:
+      Glob.delete(value)
+    else:
+      Glob.q[value].put('delete')
+    
+      		
   def updateGeometries(self):
     super(TheTable, self).updateGeometries()
     self.verticalScrollBar().setSingleStep(2)
@@ -576,19 +598,10 @@ class Worker(threading.Thread):
       Glob.x[self.url]["isActive"] = False
     elif status == 'delete':
       Glob.x[self.url]['isPaused'] = True
-      del Glob.x[self.url]
     Glob.write()
     Glob.threadLock_mem.release()
     if status == 'delete':
-      section = re.findall("4chan.org/[a-z0-9]*/res", self.url)[0].split("/")[1]
-      number =  re.findall("res/[0-9]*", self.url)[0][4:]  
-      path = os.getcwd()
-      path = os.path.join(path, section)
-      path = os.path.join(path, number)
-      if os.path.isdir(path):
-        shutil.rmtree(path)
-      else:
-        print('Folder didn\'t exist')
+      Glob.delete(url)
     
     
 class Reader(threading.Thread):
@@ -603,7 +616,7 @@ class Reader(threading.Thread):
         w = Worker(k)
         w.start()
         Glob.x[k]["isActive"] = True
-        Glob.q[k] = queue.Queue()
+      Glob.q[k] = queue.Queue()
       
     Glob.write()
     Glob.threadLock_mem.release()
@@ -618,6 +631,7 @@ class Reader(threading.Thread):
             w = Worker(k)
             w.start()
             Glob.x[k]["isActive"] = True
+            Glob.q[k] = queue.Queue()
         Glob.write()
         Glob.update = False
         Glob.threadLock_mem.release()
@@ -643,7 +657,6 @@ def add_db(url):
     Glob.x[url]['section'] = re.findall("4chan.org/[a-z0-9]*/res", url)[0].split("/")[1]
     Glob.x[url]['thread'] = re.findall("res/[0-9]*", url)[0][4:]
     Glob.x[url]['number_images'] = '*/*'
-    Glob.q[url] = queue.Queue()
   else:
     print("Already downloading thread " + url)
     
