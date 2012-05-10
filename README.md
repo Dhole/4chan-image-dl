@@ -13,7 +13,7 @@
 
 ## Installation
 * To use the program you will need python3.2 and and pyqt4 bindings for python3
-* For ubuntu, just do: "sudo apt-get install python3.2 python3-pyqt4
+* For ubuntu, just do: "sudo apt-get install python3.2 python3-pyqt4"
 
 ## Usage
 * To execute, just run 4chan_gui.py
