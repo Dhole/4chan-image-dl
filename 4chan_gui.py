@@ -1,7 +1,7 @@
 #!/usr/bin/python3.2
 
-""" 4chan downloader
-This program will download all the images from 4chan threads until 404'ed """
+""" The Chandler: imageboard pictures downloader
+This program will download all the images from various imageboards threads until 404'ed """
 
 __author__ = "Dhole"
 __license__ = "GPL"
@@ -28,7 +28,7 @@ class Glob(object):
   stop = False
   update = False
   my_array = []
-  header = ['url', 'section', 'thread', 'images', 'status']
+  header = ['url', 'im board', 'section', 'thread', 'images', 'status']
   x = {}
   threadLock_mem = threading.RLock()
   threadLock_file = threading.RLock()
@@ -72,6 +72,7 @@ class Glob(object):
     for k,v in Glob.x.items():
       my_array.append([])
       my_array[i].append(k)
+      my_array[i].append(v['imboard'])
       my_array[i].append(v['section'])
       my_array[i].append(v['thread'])
       my_array[i].append(v['number_images'])
@@ -85,19 +86,21 @@ class Glob(object):
           my_array[i].append('Active')
       i = i + 1
     if len(Glob.x) == 0:
-      my_array.append([[' '],[' '],[' '],[' '],[' ']])
+      my_array.append([[' '],[' '],[' '],[' '],[' '],[' ']])
       
     Glob.threadLock_mem.release()
     Glob.my_array = my_array
     
   def delete(url):
     Glob.threadLock_mem.acquire()
-    del Glob.x[value]
+    del Glob.x[url]
     Glob.write()
     Glob.threadLock_mem.release()
-    section = re.findall("4chan.org/[a-z0-9]*/res", url)[0].split("/")[1]
-    number =  re.findall("res/[0-9]*", url)[0][4:]  
+    imboard = get_imageboard(url)
+    section = get_section(url) #re.findall("4chan.org/[a-z0-9]*/res", url)[0].split("/")[1]
+    number =  get_number_thread(url) #re.findall("res/[0-9]*", url)[0][4:]  
     path = os.getcwd()
+    path = os.path.join(path, imboard)
     path = os.path.join(path, section)
     path = os.path.join(path, number)
     if os.path.isdir(path):
@@ -116,7 +119,7 @@ class TheTable(QTableView):
     self.resizeColumnsToContents() 
     self.setSortingEnabled(True)
     self.verticalHeader().hide()
-    for i in range(0,5):
+    for i in range(0,6):
       cur_size = self.horizontalHeader().sectionSize(i)
       self.horizontalHeader().resizeSection(i,cur_size + 20)
     self.horizontalHeader().setResizeMode(QHeaderView.Fixed)
@@ -211,9 +214,11 @@ class TheTable(QTableView):
       
   def view_folder_slot(self, value):
     print("Viewing folder" + value)
-    section = re.findall("4chan.org/[a-z0-9]*/res", value)[0].split("/")[1]
-    number =  re.findall("res/[0-9]*", value)[0][4:]
+    imboard = get_imageboard(value)
+    section = get_section(value) #re.findall("4chan.org/[a-z0-9]*/res", value)[0].split("/")[1]
+    number =  get_number_thread(value) #re.findall("res/[0-9]*", value)[0][4:]
     path = os.getcwd()
+    path = os.path.join(path, imboard)
     path = os.path.join(path, section)     
     path = os.path.join(path, number) 
     #This works fine on unix
@@ -245,7 +250,7 @@ class MyWindow(QMainWindow):
     self.urlLine = QLineEdit(self)
     topBox.addWidget(self.urlLine)
     self.downloadButton = QPushButton('', self)
-    self.downloadButton.setIcon(QIcon('download.svg'))
+    self.downloadButton.setIcon(QIcon('icons/download.svg'))
     self.downloadButton.setEnabled(False)
     topBox.addWidget(self.downloadButton)
     #self.downloadMoreButton = QPushButton('Download more', self)
@@ -264,15 +269,15 @@ class MyWindow(QMainWindow):
     self.createMenus()
     self.createStatusBar()
     
-    pauseAllAction = QAction(QIcon('stop.svg'), 'Pause all', self)
+    pauseAllAction = QAction(QIcon('icons/stop.svg'), 'Pause all', self)
     pauseAllAction.setShortcut('Ctrl+P')
     pauseAllAction.triggered.connect(self.pauseAllSlot)
     
-    continueAllAction = QAction(QIcon('continue.svg'), 'Continue all', self)
+    continueAllAction = QAction(QIcon('icons/continue.svg'), 'Continue all', self)
     continueAllAction.setShortcut('Ctrl+P')
     continueAllAction.triggered.connect(self.continueAllSlot)
     
-    clear404Action = QAction(QIcon('clear.svg'), 'Clear all 404', self)
+    clear404Action = QAction(QIcon('icons/clear.svg'), 'Clear all 404', self)
     clear404Action.setShortcut('Ctrl+P')
     clear404Action.triggered.connect(self.clear404Slot)
     
@@ -293,17 +298,17 @@ class MyWindow(QMainWindow):
     self.toolbar.setMovable(False)
     self.toolbar.addAction(clear404Action)
     
-    self.setWindowIcon(QIcon('big_icon.png'))
+    self.setWindowIcon(QIcon('icons/big_icon.png'))
     self.setGeometry(300, 50, 600, 600)
     self.update_dimensions()
-    self.setWindowTitle('4CHONDL')
+    self.setWindowTitle('The Chandler')
     self.show()
        
   def update_dimensions(self):
     self.tb.resizeRowsToContents()
     self.tb.resizeColumnsToContents() 
     width = 0
-    for i in range(0,5):
+    for i in range(0,6):
       cur_size = self.tb.horizontalHeader().sectionSize(i) + 8
       width = width + cur_size
     if width < 800:
@@ -421,11 +426,11 @@ class MyTableModel(QAbstractTableModel):
     if not index.isValid():
       return None
     elif role == Qt.BackgroundColorRole :
-      if self.arraydata[index.row()][4] == "Active":
+      if self.arraydata[index.row()][5] == "Active":
         return QColor(Qt.green)
-      elif self.arraydata[index.row()][4] == "Paused":
+      elif self.arraydata[index.row()][5] == "Paused":
         return QColor(Qt.yellow)
-      elif self.arraydata[index.row()][4] == "404":
+      elif self.arraydata[index.row()][5] == "404":
         return QColor(Qt.gray)
     elif role == Qt.DisplayRole:
       return self.arraydata[index.row()][index.column()]
@@ -448,12 +453,23 @@ class MyTableModel(QAbstractTableModel):
     
 def check_url(url):
   #Test if url is ok
-  url_parsed = re.findall("https.*4chan.org/[a-z0-9]*/res/[0-9]*", url)
+  url_parsed = re.findall("http(?:s)?://(?:boards.)?.*/*/res/[0-9]*(?:.php|.html)?", url)
   if len(url_parsed) < 1:
     return ""
   else:
     return url_parsed[0]
 
+def get_section(url):
+  result = re.findall(".*/[a-z0-9]*/res", url)[0].split("/")[-2]
+  return result
+
+def get_number_thread(url):
+  result = re.findall("res/[0-9]*", url)[0][4:]
+  return result
+
+def get_imageboard(url):
+  result = re.findall(".*/*/res/[0-9]*(?:.php|.html)?", url)[0].split("/")[-4].replace('boards.','').split(".")[0]
+  return result
 
 def wait(seconds):
   for i in range(0,seconds):
@@ -465,6 +481,7 @@ def wait(seconds):
 
 def get_image_urls(url):
 
+  #print('LALALA ' + url)
   #fetch html from url
   with closing(urlopen(url)) as page:
     html_code = page.read()
@@ -474,12 +491,26 @@ def get_image_urls(url):
   
   html_code = str(html_code)
   #Find urls to the images
-  images =re.findall("(?:img|cgi|images).4chan.org/[a-z0-9]+/src/(?:cb-nws/)?(?:[0-9]*).(?:jpg|png|gif)", html_code)
-  
+  images = re.findall('\"[^\"]*/src/[0-9]*.(?:jpg|png|gif)\"', html_code)
+  #Delete duplicate entries
   images = list(set(images))
+  
   images_http = []
-  for im in images:
-    images_http.append("https://"+im)
+
+  for im in images: 
+    ima = im.replace('\"', '')
+    if ima[:4] == 'http':
+      images_http.append(ima)
+    elif ima[:2] == '//':
+      if url[:5] == 'https':
+        images_http.append('https'+ima)
+      else:
+        images_http.append('http'+ima)
+    else:
+      if url[:5] == 'https':
+        images_http.append('https://'+url.split('/')[2]+ima)
+      else:
+        images_http.append('http://'+url.split('/')[2]+ima)
   
   return images_http
   
@@ -511,11 +542,17 @@ def get_image(url):
       
   #del connection
   
-  #Parse section and thread number
-  section = re.findall("4chan.org/[a-z0-9]*/res", url)[0].split("/")[1]
-  number =  re.findall("res/[0-9]*", url)[0][4:]
   
+  imboard = get_imageboard(url)
+  section = get_section(url)#re.findall("4chan.org/[a-z0-9]*/res", url)[0].split("/")[1]
+  number = get_number_thread(url) #re.findall("res/[0-9]*", url)[0][4:]
   path = os.getcwd()
+  
+  path = os.path.join(path, imboard)
+  #Create imageboard directory
+  if not os.path.isdir(path):
+    os.mkdir(path)
+  
   path = os.path.join(path, section)
   #Create section directory
   if not os.path.isdir(path):
@@ -654,8 +691,9 @@ def add_db(url):
     Glob.x[url]["is404"] = False
     Glob.x[url]["isActive"] = False
     Glob.x[url]["isPaused"] = False
-    Glob.x[url]['section'] = re.findall("4chan.org/[a-z0-9]*/res", url)[0].split("/")[1]
-    Glob.x[url]['thread'] = re.findall("res/[0-9]*", url)[0][4:]
+    Glob.x[url]['imboard'] = get_imageboard(url)
+    Glob.x[url]['section'] = get_section(url)#re.findall("4chan.org/[a-z0-9]*/res", url)[0].split("/")[1]
+    Glob.x[url]['thread'] = get_number_thread(url)#re.findall("res/[0-9]*", url)[0][4:]
     Glob.x[url]['number_images'] = '*/*'
   else:
     print("Already downloading thread " + url)
