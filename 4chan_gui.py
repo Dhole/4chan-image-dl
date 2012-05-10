@@ -4,11 +4,11 @@
 This program will download all the images from various imageboards threads until 404'ed """
 
 __author__ = "Dhole"
-__license__ = "GPL"
-__version__ = "0.3"
+__license__ = "WTFPL - Do What The Fuck You Want To Public License "
+__version__ = "0.6"
 __email__ = "bankukur@gmail.com"
-__status__ = "Development"
-__date__ = "27 Apr 2012"
+__status__ = "Beta"
+__date__ = "10 May 2012"
 
 
 from PyQt4.QtCore import *
