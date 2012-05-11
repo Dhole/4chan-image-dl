@@ -498,9 +498,9 @@ def get_image_urls(url):
       images_http.append(ima)
     elif ima[:2] == '//':
       if url[:5] == 'https':
-        images_http.append('https'+ima)
+        images_http.append('https:'+ima)
       else:
-        images_http.append('http'+ima)
+        images_http.append('http:'+ima)
     else:
       if url[:5] == 'https':
         images_http.append('https://'+url.split('/')[2]+ima)
