@@ -17,7 +17,7 @@ from urllib.request import urlopen, urlretrieve
 from time import sleep
 from contextlib import closing
 import urllib.error
-import sys, operator, pickle, os, threading, re, webbrowser, shutil, queue, urllib.request
+import sys, operator, pickle, os, threading, re, webbrowser, shutil, queue, urllib.request, platform, subprocess
 
 import socket
 socket.setdefaulttimeout(10)
@@ -222,7 +222,10 @@ class TheTable(QTableView):
     path = os.path.join(path, section)     
     path = os.path.join(path, number) 
     #This works fine on unix
-    os.system("xdg-open " + path)
+    if platform.system() == 'Windows':
+      subprocess.Popen('explorer \"'+path+'\"')
+    else:
+      os.system("xdg-open " + path)
   	
   def delete_slot(self, value):
     print("Deleting " + value)
@@ -638,7 +641,7 @@ class Worker(threading.Thread):
     Glob.write()
     Glob.threadLock_mem.release()
     if status == 'delete':
-      Glob.delete(url)
+      Glob.delete(self.url)
     
     
 class Reader(threading.Thread):
