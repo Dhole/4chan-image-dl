@@ -595,8 +595,8 @@ def get_image(url):
       continue
 
     for im in images:
-      if not Glob.q[url].empty(): break
       if im not in down_images:
+        if not Glob.q[url].empty(): break
         filename =  re.findall("[0-9]*.(?:jpg|gif|png)",im)[0]
         if not os.path.exists(os.path.join(path,filename)):
           try:
