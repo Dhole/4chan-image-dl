@@ -240,7 +240,7 @@ class TheTable(QTableView):
 
   def updateGeometries(self):
     super(TheTable, self).updateGeometries()
-    self.verticalScrollBar().setSingleStep(2)
+    #self.verticalScrollBar().setSingleStep(2)
 
 
 class MyWindow(QMainWindow):
@@ -302,7 +302,7 @@ class MyWindow(QMainWindow):
     self.toolbar.addAction(clear404Action)
 
     self.setWindowIcon(QIcon('icons/big_icon.png'))
-    self.setGeometry(300, 50, 600, 600)
+    self.setGeometry(300, 50, 800, 400)
     self.update_dimensions()
     self.setWindowTitle('The Chandler')
     self.show()
@@ -311,15 +311,18 @@ class MyWindow(QMainWindow):
     self.tb.resizeRowsToContents()
     self.tb.resizeColumnsToContents()
     width = 0
+
     for i in range(0,6):
-      cur_size = self.tb.horizontalHeader().sectionSize(i) + 8
-      width = width + cur_size
-    if width < 800:
-      width = 800
+      cur_size = self.tb.horizontalHeader().sectionSize(i)
+      self.tb.horizontalHeader().resizeSection(i,cur_size)
+      width = width + cur_size + 8
+
+    if width < 600:
+      width = 600
 
     self.setMaximumWidth(width)
-    self.setMinimumWidth(width)
-    self.setMinimumHeight(600)
+    self.setMinimumWidth(width/2)
+    self.setMinimumHeight(400)
     self.tb.horizontalHeader().setStretchLastSection(True)
 
   def enteredUrl(self, line):
@@ -344,14 +347,14 @@ class MyWindow(QMainWindow):
 
   def update_table(self):
     Glob.update_values()
-    self.tb.tablemodel = MyTableModel(Glob.my_array, Glob.header, self.tb)
-    self.tb.setModel(self.tb.tablemodel)
-    sort_column = self.tb.horizontalHeader().sortIndicatorSection()
-    sort_order = self.tb.horizontalHeader().sortIndicatorOrder()
-    self.tb.sortByColumn(sort_column, sort_order)
-    self.update_dimensions()
-    if self.tb.current_row != -1:
-      self.tb.selectRow(self.tb.current_row)
+    self.tb.tablemodel.update(Glob.my_array, Glob.header) # = MyTableModel(Glob.my_array, Glob.header, self.tb)
+    #self.tb.setModel(self.tb.tablemodel)
+    #sort_column = self.tb.horizontalHeader().sortIndicatorSection()
+    #sort_order = self.tb.horizontalHeader().sortIndicatorOrder()
+    #self.tb.sortByColumn(sort_column, sort_order)
+    #self.update_dimensions()
+    #if self.tb.current_row != -1:
+      #self.tb.selectRow(self.tb.current_row)
 
   def pauseAllSlot(self):
     self.statusBar().showMessage(self.tr("Pausing all threads"))
@@ -416,6 +419,10 @@ class MyWindow(QMainWindow):
 class MyTableModel(QAbstractTableModel):
   def __init__(self, datain, headerdata, parent=None, *args):
     QAbstractTableModel.__init__(self, parent, *args)
+    self.arraydata = datain
+    self.headerdata = headerdata
+
+  def update(self, datain, headerdata):
     self.arraydata = datain
     self.headerdata = headerdata
 
