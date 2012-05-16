@@ -238,8 +238,8 @@ class TheTable(QTableView):
       Glob.q[value].put('delete')
 
 
-  def updateGeometries(self):
-    super(TheTable, self).updateGeometries()
+  #def updateGeometries(self):
+    #super(TheTable, self).updateGeometries()
     #self.verticalScrollBar().setSingleStep(2)
 
 
@@ -347,14 +347,17 @@ class MyWindow(QMainWindow):
 
   def update_table(self):
     Glob.update_values()
+
     self.tb.tablemodel.update(Glob.my_array, Glob.header) # = MyTableModel(Glob.my_array, Glob.header, self.tb)
-    #self.tb.setModel(self.tb.tablemodel)
-    #sort_column = self.tb.horizontalHeader().sortIndicatorSection()
-    #sort_order = self.tb.horizontalHeader().sortIndicatorOrder()
-    #self.tb.sortByColumn(sort_column, sort_order)
-    #self.update_dimensions()
-    #if self.tb.current_row != -1:
-      #self.tb.selectRow(self.tb.current_row)
+    #self.tb.show()
+
+    self.tb.setModel(self.tb.tablemodel)
+    sort_column = self.tb.horizontalHeader().sortIndicatorSection()
+    sort_order = self.tb.horizontalHeader().sortIndicatorOrder()
+    self.tb.sortByColumn(sort_column, sort_order)
+    self.update_dimensions()
+    if self.tb.current_row != -1:
+      self.tb.selectRow(self.tb.current_row)
 
   def pauseAllSlot(self):
     self.statusBar().showMessage(self.tr("Pausing all threads"))
@@ -422,9 +425,8 @@ class MyTableModel(QAbstractTableModel):
     self.arraydata = datain
     self.headerdata = headerdata
 
-  def update(self, datain, headerdata):
+  def update(self, datain):
     self.arraydata = datain
-    self.headerdata = headerdata
 
   def rowCount(self, parent):
       return len(self.arraydata)
