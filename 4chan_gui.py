@@ -348,7 +348,7 @@ class MyWindow(QMainWindow):
   def update_table(self):
     Glob.update_values()
 
-    self.tb.tablemodel.update(Glob.my_array, Glob.header) # = MyTableModel(Glob.my_array, Glob.header, self.tb)
+    self.tb.tablemodel.update(Glob.my_array) # = MyTableModel(Glob.my_array, Glob.header, self.tb)
     #self.tb.show()
 
     self.tb.setModel(self.tb.tablemodel)
