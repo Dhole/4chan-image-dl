@@ -344,7 +344,6 @@ class MyWindow(QMainWindow):
       Glob.update_values()
       self.update_table()
 
-
   def update_table(self):
     Glob.update_values()
 
