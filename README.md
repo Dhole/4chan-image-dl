@@ -4,6 +4,9 @@
 #### Beta software 
 ==============
 
+## Screenshot
+![ScreenShot](https://raw.github.com/Dhole/4chan-image-dl/master/screenshot.png)
+
 ## Features
 * Allows downloading multiple image threads at the same time, until it reaches 404
 * Able to pause/continue downloads
