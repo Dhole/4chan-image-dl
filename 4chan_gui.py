@@ -195,22 +195,22 @@ class TheTable(QTableView):
     Glob.q[value].put('pause')
 
   def browse_url_slot(self, value):
-  	print("Browsing url " + value)
-  	webbrowser.open(value)
+    print("Browsing url " + value)
+    webbrowser.open(value)
 
   def copy_slot(self, value):
-  	print("Copying " + value)
-  	self.clipboard.setText(value)
+    print("Copying " + value)
+    self.clipboard.setText(value)
 
   def clear_slot(self, value):
-  	print("Clearing " + value)
-  	Glob.threadLock_mem.acquire()
-  	if Glob.x[value]['is404']:
-  	  del Glob.x[value]
-  	  Glob.write()
-  	else:
-  	  print(value + " is not 404, you should delete it instead")
-  	Glob.threadLock_mem.release()
+    print("Clearing " + value)
+    Glob.threadLock_mem.acquire()
+    if Glob.x[value]['is404']:
+      del Glob.x[value]
+      Glob.write()
+    else:
+      print(value + " is not 404, you should delete it instead")
+    Glob.threadLock_mem.release()
 
   def view_folder_slot(self, value):
     print("Viewing folder" + value)
