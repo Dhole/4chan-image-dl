@@ -1,4 +1,4 @@
-#!/usr/bin/python3.2
+#!/usr/bin/python3
 
 """ The Chandler: imageboard pictures downloader
 This program will download all the images from various imageboards threads until 404'ed """
