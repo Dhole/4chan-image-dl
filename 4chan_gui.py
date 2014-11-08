@@ -464,22 +464,36 @@ class MyTableModel(QAbstractTableModel):
 
 def check_url(url):
   #Test if url is ok
+  if is4chan(url):
+      return url
   url_parsed = re.findall("http(?:s)?://(?:boards.)?.*/*/res/[0-9]*(?:.php|.html)?", url)
   if len(url_parsed) < 1:
     return ""
   else:
     return url_parsed[0]
 
+def is4chan(url):
+  return "4chan" in url
+
 def get_section(url):
-  result = re.findall(".*/[a-z0-9]*/res", url)[0].split("/")[-2]
+  if is4chan(url):
+    result = re.findall("4chan.org/.*/thread", url)[0].split("/")[-2]
+  else:
+    result = re.findall(".*/[a-z0-9]*/res", url)[0].split("/")[-2]
   return result
 
 def get_number_thread(url):
-  result = re.findall("res/[0-9]*", url)[0][4:]
+  if is4chan(url):
+    result = re.findall("(?<=thread/).*", url)[0].replace("/", "_")
+  else:
+    result = re.findall("res/[0-9]*", url)[0][4:]
   return result
 
 def get_imageboard(url):
-  result = re.findall(".*/*/res/[0-9]*(?:.php|.html)?", url)[0].split("/")[-4].replace('boards.','').split(".")[0]
+  if is4chan(url):
+    return "4chan"
+  else:
+    result = re.findall(".*/*/res/[0-9]*(?:.php|.html)?", url)[0].split("/")[-4].replace('boards.','').split(".")[0]
   return result
 
 def get_image_urls(url):
@@ -494,7 +508,10 @@ def get_image_urls(url):
 
   html_code = str(html_code)
   #Find urls to the images
-  images = re.findall('\"[^\"]*/src/[0-9]*.(?:jpg|png|gif)\"', html_code)
+  if is4chan(url):
+    images = re.findall('\"[^\"]*/i.4cdn.org/./[0-9]*.(?:jpg|png|gif)\"', html_code)
+  else:
+    images = re.findall('\"[^\"]*/src/[0-9]*.(?:jpg|png|gif)\"', html_code)
   #Delete duplicate entries
   images = list(set(images))
 
