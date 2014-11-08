@@ -1,4 +1,4 @@
-##The Chandler [Broken with 4chan, needs updating]
+##The Chandler [4chan issue FIXED!]
 ### Python program to download pictures from multiple imageboard threads like 4chan, 420chan or 7chan.
 ### GUI made with PyQt
 #### Beta software 
